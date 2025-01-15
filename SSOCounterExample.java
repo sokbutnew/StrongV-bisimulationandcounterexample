@@ -1,13 +1,5 @@
 import java.io.IOException;
-import java.io.PrintStream;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -16,8 +8,6 @@ import java.time.Instant;
 
 public class SSOCounterExample {
     public static void main(String[] args) throws IOException {
-        PrintStream out = new PrintStream("output.txt");
-        System.setOut(out);
 
         String inputFile = args[0];
         String inputLine = args[1];
@@ -117,89 +107,181 @@ public class SSOCounterExample {
             U = new ArrayList<>(nextU);
             countU = nextU.size();
 
-            System.out.println(countU);
         }
 
         Instant endDealTime = Instant.now();
         Duration durationDeal = Duration.between(startDealTime, endDealTime);
 
         int lineCount = countUnique(ID);
-        System.out.println("Number of partitions: " + lineCount);
-        System.out.println("Number of iterations: " + count);
-        System.out.println("Initialization time: " + duration.toMillis() + " ms");
-        System.out.println("Processing time: " + durationDeal.toMillis() + " ms");
-        boolean bisimilar = checkStrongVBisimulation(0, 3, sig, ID, graph);
-        if (!bisimilar) {
-            System.out.println("Vertices 0 and 3 are not bisimilar.");
-        } else {
-            System.out.println("Vertices 0 and 3 are " + Arrays.toString(inputs) + " bisimilar.");
-        }
-    }
 
-    public static boolean checkStrongVBisimulation(int x, int y, int[][][] sig, int[] ID, EdgeWeightedDigraph graph) {
+        int x = Integer.parseInt(args[2]);
+        int y = Integer.parseInt(args[3]);
 
-        if (ID[x] != ID[y]) {
-            Set<Integer> labels = new HashSet<>();
-
-            for (int[] labelIdX : sig[x]) {
-                int marktoX = labelIdX[1];
-                boolean found = false;
-                
-                for (int[] labelIdY : sig[y]) {
-                    if (labelIdX[0] == labelIdY[0] && marktoX == labelIdY[1]) { 
-                        found = true;
-                        break; 
-                    }
-                }
-
-                if (!found) {
-                    labels.add(labelIdX[0]);
-                }
-            }
-
-            if (!labels.isEmpty()) {
-
-                StringBuilder failedLabels = new StringBuilder();
-                for (int labelId : labels) {
-                    String weightLabel = graph.getWeightLabel(labelId);
-                    failedLabels.append(weightLabel).append(", ");
-                }
-                System.out.println("Bisimulation failed at vertex: " + x + " with labels: " + failedLabels.toString());
-                return false;
-            }
-    
-            labels.clear();
-            for (int[] labelIdY : sig[y]) {
-                int marktoY = labelIdY[1];
-                boolean found = false;
-                for (int[] labelIdX : sig[x]) {
-                    if (labelIdY[0] == labelIdX[0] && marktoY == labelIdX[1]) {
-                        found = true;
-                        break;
-                    }
-                }
-                if (!found) {
-                    labels.add(labelIdY[0]);
-                }
-            }
-    
-            if (!labels.isEmpty()) {
-                StringBuilder failedLabels = new StringBuilder();
-                for (int labelId : labels) {
-                    String weightLabel = graph.getWeightLabel(labelId);
-                    failedLabels.append(weightLabel).append(", ");
-                }
-                System.out.println("Bisimulation failed at vertex: " + y + " with labels: " + failedLabels.toString());
-                return false;
-            }
-        }
-    
-        return true; 
+        strongVBisimulationAlgorithm(graph, x, y, ID);
     }
 
     private static int countUnique(int[] array) {
         return (int) Arrays.stream(array).distinct().count();
     }
+
+    private static boolean areActionsEqual(EdgeWeightedDigraph graph, int x, int y) {
+        int V = graph.getV();
+
+        if (x < 0 || x >= V || y < 0 || y >= V) {
+            throw new IllegalArgumentException("Vertex out of bounds");
+        }
+
+        Set<Integer> actionsX = new HashSet<>();
+        Set<Integer> actionsY = new HashSet<>();
+
+        for (Pair<Integer, Integer> edge : graph.adj(x)) {
+            actionsX.add(edge.getKey());
+        }
+
+        for (Pair<Integer, Integer> edge : graph.adj(y)) {
+            actionsY.add(edge.getKey()); 
+        }
+
+        return actionsX.equals(actionsY);
+    }
+
+private static void printDiffActions(EdgeWeightedDigraph graph, int x, int y) {
+    Set<Integer> actionsX = new HashSet<>();
+    Set<Integer> actionsY = new HashSet<>();
+
+    for (Pair<Integer, Integer> edge : graph.adj(x)) {
+        actionsX.add(edge.getKey());
+    }
+    for (Pair<Integer, Integer> edge : graph.adj(y)) {
+        actionsY.add(edge.getKey()); 
+    }
+
+    Set<Integer> diffX = new HashSet<>(actionsX);
+    diffX.removeAll(actionsY);
+
+    Set<Integer> diffY = new HashSet<>(actionsY);
+    diffY.removeAll(actionsX);
+
+    if (!diffX.isEmpty()) {
+        System.out.println(x + " can perform the following actions that " + y + " cannot:");
+        for (Integer actionId : diffX) {
+            String actionLabel = graph.getWeightLabel(actionId);
+            System.out.println(actionLabel);
+        }
+    } else {
+        System.out.println("compare with "+y+", "+x + " cannot perform any actions.");
+    }
+
+    if (!diffY.isEmpty()) {
+        System.out.println(y + " can perform the following actions that " + x + " cannot:");
+        for (Integer actionId : diffY) {
+            String actionLabel = graph.getWeightLabel(actionId);
+            System.out.println(actionLabel); 
+        }
+    } else {
+        System.out.println("compare with "+x+", "+y + " cannot perform any actions.");
+    }
+}
+private static void strongVBisimulationAlgorithm(EdgeWeightedDigraph graph, int x, int y, int[] ID) {
+
+    if (ID[x] == ID[y]) {
+        System.out.println("Strong V-Bisimulation holds for states " + x + " and " + y);
+        return;
+    }
+
+    Queue<Pair<Integer, Integer>> queue = new LinkedList<>();
+    Set<Pair<Integer, Integer>> visited = new HashSet<>();
+
+    Map<Pair<Integer, Integer>, List<Transition>> xActionPaths = new HashMap<>();
+    Map<Pair<Integer, Integer>, List<Transition>> yActionPaths = new HashMap<>();
+
+    Pair<Integer, Integer> startState = new Pair<>(x, y);
+    queue.add(startState);
+    visited.add(startState);
+    xActionPaths.put(startState, new ArrayList<>());
+    yActionPaths.put(startState, new ArrayList<>());
+
+    while (!queue.isEmpty()) {
+        Pair<Integer, Integer> currentState = queue.poll();
+        int currentX = currentState.getKey();
+        int currentY = currentState.getValue();
+
+        if (!areActionsEqual(graph, currentX, currentY)) {
+
+            System.out.println("Counterexample found for states " + currentX + " and " + currentY);
+            
+            List<Transition> xCurrentPath = xActionPaths.get(currentState);
+            System.out.println("X state transitions:");
+            for (Transition transition : xCurrentPath) {
+                System.out.println(transition);
+            }
+
+            List<Transition> yCurrentPath = yActionPaths.get(currentState);
+            System.out.println("Y state transitions:");
+            for (Transition transition : yCurrentPath) {
+                System.out.println(transition); 
+            }
+
+            printDiffActions(graph, currentX, currentY);
+
+            return;
+        }
+
+        Set<Integer> actionsX = new HashSet<>();
+        Set<Integer> actionsY = new HashSet<>();
+
+        for (Pair<Integer, Integer> edge : graph.adj(currentX)) {
+            actionsX.add(edge.getKey());
+        }
+
+        for (Pair<Integer, Integer> edge : graph.adj(currentY)) {
+            actionsY.add(edge.getKey()); 
+        }
+
+        Set<Integer> commonActions = new HashSet<>(actionsX);
+        commonActions.retainAll(actionsY);
+
+        for (Integer action : commonActions) {
+            List<Pair<Integer, Integer>> nextStatesX = new ArrayList<>();
+            List<Pair<Integer, Integer>> nextStatesY = new ArrayList<>();
+
+            for (Pair<Integer, Integer> edgeX : graph.adj(currentX)) {
+                if (edgeX.getKey().equals(action)) {
+                    nextStatesX.add(new Pair<>(edgeX.getValue(), action));
+                }
+            }
+
+            for (Pair<Integer, Integer> edgeY : graph.adj(currentY)) {
+                if (edgeY.getKey().equals(action)) {
+                    nextStatesY.add(new Pair<>(edgeY.getValue(), action));
+                }
+            }
+
+            for (Pair<Integer, Integer> nextX : nextStatesX) {
+                for (Pair<Integer, Integer> nextY : nextStatesY) {
+                    Pair<Integer, Integer> nextState = new Pair<>(nextX.getKey(), nextY.getKey());
+
+                    if (!visited.contains(nextState)) {
+
+                        queue.add(nextState);
+                        visited.add(nextState);
+
+                        List<Transition> xCurrentPath = new ArrayList<>(xActionPaths.get(currentState));
+                        String actionLabel = graph.getWeightLabel(action);
+                        xCurrentPath.add(new Transition(currentX, actionLabel, nextX.getKey()));
+                        xActionPaths.put(nextState, xCurrentPath);
+
+                        List<Transition> yCurrentPath = new ArrayList<>(yActionPaths.get(currentState));
+                        yCurrentPath.add(new Transition(currentY, actionLabel, nextY.getKey()));
+                        yActionPaths.put(nextState, yCurrentPath);
+                    }
+                }
+            }
+        }
+
+    }
+}
+
 }
 
 class Signature {
@@ -222,3 +304,33 @@ class Signature {
         return Arrays.deepHashCode(signature);
     }
 }
+
+class Transition {
+    private final int fromState;
+    private final String action;
+    private final int toState;
+
+    public Transition(int fromState, String action, int toState) {
+        this.fromState = fromState;
+        this.action = action;
+        this.toState = toState;
+    }
+
+    public int getFromState() {
+        return fromState;
+    }
+
+    public String getAction() {
+        return action;
+    }
+
+    public int getToState() {
+        return toState;
+    }
+
+    @Override
+    public String toString() {
+        return "(" + fromState + ", " + action + ", " + toState + ")";
+    }
+}
+
